@@ -1,7 +1,7 @@
 #PSYC 259 Homework 3 - Data Structure
 #For full credit, provide answers for at least 8/11 questions
 
-#List names of students collaborating with: 
+#List names of students collaborating with: Hugo Salazar
 
 ### SETUP: RUN THIS BEFORE STARTING ----------
 
@@ -14,7 +14,7 @@ library(rvest)
 
 # Scrape the data for the new rolling stone top 500 list
 url <- "https://stuarte.co/2021/2021-full-list-rolling-stones-top-500-songs-of-all-time-updated/"
-rs_new <- url %>% read_html() %>% html_nodes(xpath='//*[@id="post-14376"]/div[2]/div[2]/table') %>% html_table() %>% pluck(1)
+rs_new <- url %>% read_html() %>% html_nodes("table") %>% html_table() %>% pluck(1)
 
 # Scrape the data for the old rolling stone top 500 list
 url_old <- "https://www.cs.ubc.ca/~davet/music/list/Best9.html"
@@ -38,8 +38,8 @@ load("rs_data.RData")
 # Why did some of the artist-song fail to match up?
 
 #ANSWER
-
-
+rs_joined_orig <- full_join(rs_new,rs_old, by = join_by("Artist", "Song"))
+nrow(rs_joined_orig)
 
 ### Question 2 ---------- 
 
@@ -50,8 +50,13 @@ load("rs_data.RData")
 # Make Rank and Year into integer variables for rs_old before binding them into rs_all
 
 #ANSWER
+rs_new <- mutate(rs_new, Source = "New")
+rs_old <- mutate(rs_old, Source = "Old")
 
+rs_old$Rank <- as.integer(rs_old$Rank)
+rs_old$Year <- as.integer(rs_old$Year)
 
+rs_all <- bind_rows(rs_old, rs_new)
 ### Question 3 ----------
 
 # The join in Q1 resulted in duplicates because of differences in how the songs and artists names were written
@@ -62,6 +67,14 @@ load("rs_data.RData")
 # Use both functions to make all artists/song lowercase and remove any extra spaces
 
 #ANSWER
+
+rs_all <- rs_all %>%
+  mutate(Artist = str_remove_all(Artist,"The "), Song = str_remove_all(Song,"The " )) %>%
+  mutate(Artist = str_replace_all(Artist,"&", "and"), Song = str_replace_all(Song,"&", "and")) %>%
+  mutate(Artist = str_remove_all(Artist,"[:punct:]"), Song = str_remove_all(Song,"[:punct:]")) %>%
+  mutate(Artist = str_to_lower(Artist), Song = str_to_lower(Song)) %>%
+  mutate(Artist = str_trim(Artist), Song = str_trim(Song))
+  
 
 
 ### Question 4 ----------
@@ -76,6 +89,9 @@ load("rs_data.RData")
 
 #ANSWER
 
+old <- rs_all %>% filter(Source == "Old")
+new <- rs_all %>% filter(Source == "New")
+rs_joined <- full_join(old, new, by = join_by("Artist", "Song"), suffix = c("_Old", "_New"))
 
 ### Question 5 ----------
 
@@ -89,6 +105,11 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_joined <- rs_joined %>% select(!c(Source_Old,Source_New)) %>% filter(!is.na(Rank_Old)) %>% filter(!is.na(Rank_New)) %>%
+  mutate(Rank_Change = Rank_Old - Rank_New) %>%
+  arrange(Rank_Change) %>% 
+  select(!c(Year_New))
+
 
 ### Question 6 ----------
 
@@ -100,7 +121,14 @@ load("rs_data.RData")
 
 #ANSWER
 
+rs_joined <- rs_joined %>%
+  mutate(Decade = (10 * floor(Year_Old/10))) %>%
+  mutate(Decade = str_c(Decade,"s")) %>% 
+  group_by(Decade)
 
+rs_joined %>% summarize(MeanRC = mean(Rank_Change))
+
+## 1990s improved the most
 
 ### Question 7 ----------
 
@@ -111,7 +139,9 @@ load("rs_data.RData")
 
 #ANSWER
 
+fct_count(rs_joined$Decade)
 
+fct_lump(rs_joined$Decade, 3) %>% fct_count(prop = TRUE)
 
 ### Question 8 ---------- 
 
@@ -121,6 +151,10 @@ load("rs_data.RData")
 
 #ANSWER
 
+top20 <- read_csv("top_20.csv")
+top20$Release <- parse_date_time(top20$Release, orders = "dby")
+
+class(top20$Release)
 
 ### Question 9 --------
 
